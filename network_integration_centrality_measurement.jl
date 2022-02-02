@@ -24,9 +24,11 @@ input_hypermethylation_path = "Result/LUSC/TN_Tumor_vs_Normal/hyper/getPair.hype
 input_hypomethylation_path = "Result/LUSC/TN_Tumor_vs_Normal/hypo/getPair.hypo.pairs.significant.csv"
 input_gene_loc_path = "output_network/" * project_name * "_gene_location.csv"
 
-tumor_output_gene_loc_path = "graph_visualize/" * project_name * "_methylation_tumor_gene_loc_giant.csv"
-tumor_output_network_path = "graph_visualize/" * project_name * "_methylation_tumor_gene_giant.csv"
-output_graph = "graph_visualize/" * project_name * "_meth_gene_graph_giant"
+# Create directory to put the integrated netowrk nodes and edges dataframe
+isdir("graph_visualize") || mkdir("graph_visualize")
+
+tumor_output_gene_loc_path = "graph_visualize/" * project_name * "_integrated_network_nodes.csv"
+tumor_output_network_path = "graph_visualize/" * project_name * "_integrated_network_edges.csv"
 ##
 # Helper function to integrate and perform community identification
 function get_df_network(path; threshold = 0.99, delim = "\t")
