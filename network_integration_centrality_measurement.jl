@@ -1,4 +1,6 @@
 ##
+#For first time user, please read the leiden_community.jl to install some dependency for leiden algorithm
+
 using Distributed
 Distributed.addprocs(20, exeflags = `--project=$(Base.active_project())`)
 

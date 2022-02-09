@@ -1,6 +1,13 @@
-using Distributed
-addprocs(20,exeflags=`--project=$(Base.active_project())`)
-@everywhere using NetworkInference
+#Uncomment to do parrallel computation
+#using Pkg
+#Pkg.activate(".")
+#using Distributed
+#addprocs(20,exeflags=`--project=$(Base.active_project())`)
+#@everywhere using NetworkInference
+
+#Comment out to do parrallel computation
+using NetworkInference
+
 
 DEGs_filepath = "./TCGA-LUSC_Tumor.tsv"
 
