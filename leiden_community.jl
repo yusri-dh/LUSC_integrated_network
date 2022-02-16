@@ -338,54 +338,56 @@ function discover_communities(jc::JuliaCommunityInstance; mute::Bool=false)
     jc.communities = DataFrame(c=1:jc.n_community, size=length.(partitions))
 end
 
-function optimise_resolution(jc::JuliaCommunityInstance; γ_from::Float64=0.0001, γ_end::Float64=0.01, γ_step::Float64=0.0001)
+function optimise_resolution(jc::JuliaCommunityInstance; γ_from::Float64 = 0.0001, γ_end::Float64 = 0.01, γ_step::Float64 = 0.0001)
     println("\n")
-    qualities = DataFrame(resolution=[], n_community=[], modularity=[], quality=[])
+    qualities = DataFrame(resolution = [], n_community = [], modularity = [], quality = [])
     jc_copy = deepcopy(jc)
-    progress = Progress(length(γ_from:γ_step:γ_end), desc="Finding the best resolution γ for the Leiden-based community discovery algorithm: ")
-    for γ  in γ_from:γ_step:γ_end
+    progress = Progress(length(γ_from:γ_step:γ_end), desc = "Finding the best resolution γ for the Leiden-based community discovery algorithm: ")
+    for γ in γ_from:γ_step:γ_end
         jc_copy.γ = γ
         discover_communities(jc_copy, mute = true)
         push!(qualities, (γ, jc_copy.n_community, jc_copy.modularity, jc_copy.quality))
         next!(progress)
         #print("\n\t\tResolution: $γ: $(jc_copy.n_community) commxunities discovered; Modularity: $(jc_copy.modularity); CPM Quality: $(jc_copy.quality).")
     end
+    ispath("leiden_res/data") || mkpath("leiden_res/data")
     CSV.write("leiden_res/data/community_discover_optimisation-$(jc.method)$(jc.task_series).csv", qualities)
 
     p_modularity = plot(
-        layer(qualities, x=:resolution, y=:modularity, Geom.line, Geom.point, Theme(default_color="blue")),
-        Guide.xticks(ticks=γ_from:γ_step * 2:γ_end),
+        layer(qualities, x = :resolution, y = :modularity, Geom.line, Geom.point, Theme(default_color = "blue")),
+        Guide.xticks(ticks = γ_from:γ_step*2:γ_end),
         Guide.xlabel("resolution γ"),
         Guide.ylabel("modularity"),
-        Theme(major_label_font_size=10pt),
-        Scale.y_continuous(format=:plain)
+        Theme(major_label_font_size = 10pt),
+        Scale.y_continuous(format = :plain)
     )
+    ispath("leiden_res/fig") || mkpath("leiden_res/fig")
     fig_modularity = "leiden_res/fig/community_discover_optimisation-modularities-$(jc.method)$(jc.task_series).svg"
-    draw(SVG(fig_modularity, 24cm, 16cm), p_modularity);
+    draw(SVG(fig_modularity, 24cm, 16cm), p_modularity)
     open_file(fig_modularity)
 
     p_quality = plot(
-        layer(qualities, x=:resolution, y=:quality, Geom.line, Geom.point, Theme(default_color="blue")),
-        Guide.xticks(ticks=γ_from:γ_step * 2:γ_end),
+        layer(qualities, x = :resolution, y = :quality, Geom.line, Geom.point, Theme(default_color = "blue")),
+        Guide.xticks(ticks = γ_from:γ_step*2:γ_end),
         Guide.xlabel("resolution γ"),
         Guide.ylabel("quality"),
-        Theme(major_label_font_size=10pt),
-        Scale.y_continuous(format=:plain)
+        Theme(major_label_font_size = 10pt),
+        Scale.y_continuous(format = :plain)
     )
     fig_quality = "leiden_res/fig/community_discover_optimisation-qualities-$(jc.method)$(jc.task_series).svg"
-    draw(SVG(fig_quality, 24cm, 16cm), p_quality);
+    draw(SVG(fig_quality, 24cm, 16cm), p_quality)
     open_file(fig_quality)
 
     p_n_communities = plot(
-        layer(qualities, x=:resolution, y=:n_community, Geom.line, Geom.point, Theme(default_color="blue")),
-        Guide.xticks(ticks=γ_from:γ_step * 2:γ_end),
+        layer(qualities, x = :resolution, y = :n_community, Geom.line, Geom.point, Theme(default_color = "blue")),
+        Guide.xticks(ticks = γ_from:γ_step*2:γ_end),
         Guide.xlabel("resolution γ"),
         Guide.ylabel("number of communities"),
-        Theme(major_label_font_size=10pt),
-        Scale.y_continuous(format=:plain)
+        Theme(major_label_font_size = 10pt),
+        Scale.y_continuous(format = :plain)
     )
     fig_n_communities = "leiden_res/fig/community_discover_optimisation-n-communities-$(jc.method)$(jc.task_series).svg"
-    draw(SVG(fig_n_communities, 24cm, 16cm), p_n_communities);
+    draw(SVG(fig_n_communities, 24cm, 16cm), p_n_communities)
     open_file(fig_n_communities)
 end
 

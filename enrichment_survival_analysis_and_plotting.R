@@ -9,7 +9,9 @@ library(ELMER)
 library(pheatmap)
 library(RColorBrewer)
 library(grid)
-working_dir = "/home/yusri/Documents/project/LUSC_integrated_network/"
+library(ggbeeswarm)
+require("ggrepel")
+working_dir = "LUSC_integrated_network/"
 setwd(working_dir)
 df = read_csv("graph_visualize/TCGA-LUSC_methylation_tumor_gene_loc_giant.csv")
 df_network = read_csv("graph_visualize/TCGA-LUSC_methylation_tumor_gene_giant.csv")
@@ -57,10 +59,10 @@ low_p_value_df  <- gostres$result %>%
   select(query,source,term_name,term_size,intersection_size,p_value)
 
 # Save all significant result
-write_csv(gostres$result,"./paper/Supplemental/significant_gsea.csv")
+write_csv(gostres$result,"significant_gsea.csv")
 
 # Save the 3 lowest p value functional class
-write_csv(low_p_value_df,"./paper/Supplemental/low_p_value_enrichment.csv")
+write_csv(low_p_value_df,"low_p_value_enrichment.csv")
 
 
 # centrality ranking -----------------------------------------------------------------
@@ -80,28 +82,16 @@ query.exp <- GDCquery(project = "TCGA-LUSC",
 clinical_patient_cancer <- GDCquery_clinic("TCGA-LUSC","clinical")
 
 cancer.exp <- GDCprepare(query = query.exp,directory="Data/LUSC/Raw/RNA/")
-dataPrep <- TCGAanalyze_Preprocessing(object = cancer.exp, cor.cut = 0.6)
-dataNorm <- TCGAanalyze_Normalization(tabDF = dataPrep,
-                                      geneInfo = geneInfoHT,
-                                      method = "gcContent")
-dataFilt <- TCGAanalyze_Filtering(tabDF = dataNorm,
-                                  method = "quantile",
-                                  qnt.cut =  0.25)
+
 # Which samples are Primary Tumor
 dataSmTP <- TCGAquery_SampleTypes(getResults(query.exp,cols="cases"),"TP")
 # which samples are solid tissue normal
 dataSmNT <- TCGAquery_SampleTypes(getResults(query.exp,cols="cases"),"NT")
-dataDEGs <- TCGAanalyze_DEA(mat1 = dataFilt[,dataSmNT],
-                            mat2 = dataFilt[,dataSmTP],
-                            Cond1type = "Normal",
-                            Cond2type = "Tumor",
-                            fdr.cut = 0.01 ,
-                            logFC.cut = 1,
-                            method = "glmLRT")
 
 
 
-dataFiltDE <- subset(dataFilt, subset = rownames(dataFilt) %in% rownames(dataDEGs))
+
+
 
 # survival analysis of betweenness centrality-----------------------------------
 selected_column = "betweenness"
@@ -114,58 +104,65 @@ selected_surv_gene_low_rank<-df %>%
 
 selected_surv_gene_high_rank<-df %>%
   filter(type=="gene") %>%
-  filter(!!as.symbol(selected_column)>=upper_limit)  %>%
+  filter(!!as.symbol(selected_column)>upper_limit)  %>%
   arrange(desc(!!as.symbol(selected_column)))
 
+LUSCMatrix <- assay(cancer.exp)
 
 
 surv_an_low <-TCGAanalyze_SurvivalKM(clinical_patient_cancer,
-                                     dataFilt,
+                                     log1p(LUSCMatrix),
                                      Genelist = selected_surv_gene_low_rank$id,
+                                     p.cut=1,
                                      Survresult = FALSE,
 )
 
 surv_an_high <-TCGAanalyze_SurvivalKM(clinical_patient_cancer,
-                                      dataFilt,
+                                      log1p(LUSCMatrix),
                                       Genelist = (selected_surv_gene_high_rank)$id,
+                                      p.cut=1,
                                       Survresult = FALSE,
 )
 
-surv_an_tf <-TCGAanalyze_SurvivalKM(clinical_patient_cancer,
-                                      dataFilt,
-                                      Genelist = gconvert(c("tp63", "klf5", "sox2"))$target,
-                                      Survresult = TRUE,
-)
-#write_csv(surv_an_low,"./paper/Supplemental/survival_analysis_low_betweenness.csv")
-#write_csv(surv_an_high,"./paper/Supplemental/survival_analysis_high_betweenness.csv")
+surv_an_low$id <- row.names(surv_an_low)
+surv_an_low$group <- "low"
+
+surv_an_low_df <- surv_an_low %>%
+  left_join(df,by="id") %>%
+  select("id","label","group","pvalue","Group2 Deaths",   "Group2 Deaths with Top",
+         "Group2 Deaths with Down", "Mean Group2 Top",
+         "Mean Group2 Down" ,  "Mean Group1","betweenness")
+
+
+surv_an_high$id <- row.names(surv_an_high)
+surv_an_high$group <- "high"
+surv_an_high_df <- surv_an_high %>%
+  left_join(df,by="id") %>%
+  select("id","label","group","pvalue","Group2 Deaths",   "Group2 Deaths with Top",
+         "Group2 Deaths with Down", "Mean Group2 Top",
+         "Mean Group2 Down" ,  "Mean Group1","betweenness")
+
+combined_survival_df <- bind_rows(surv_an_high_df,surv_an_low_df)
+combined_survival_df<-combined_survival_df %>% mutate(significant = pvalue < 0.05)
+write_csv(combined_survival_df,"survival_analysis_betweenness_centrality.csv")
+f <- ggplot(combined_survival_df,aes(x=group,y=pvalue))
+f  +  geom_violin(alpha=0.5)  +
+  scale_y_continuous(trans="log10",breaks=c(1e-4,1e-3,1e-2,0.05,1e-1,1)) +
+  #geom_vline(xintercept=c(lower_limit,upper_limit)) +
+  geom_hline(aes(yintercept = 0.05),colour="red") +
+  geom_text_repel(data = subset(combined_survival_df, pvalue < 0.005),
+            aes(label = label),size = 2)+
+  geom_quasirandom(aes(color=significant),alpha=.2)+
+  theme_classic()+
+  theme()+
+  labs(y = "log10 P-value",x="Group" ,color = "Significant genes") +
+  scale_x_discrete(labels= c("High rank\n Total=875, Significant = 192", "Low rank\nTotal=764, Significant = 92"))
+
 
 # connection analysis --------------------------------------------
-df_network_selected <- df_network %>%
-  filter(link_type == "gene-gene") %>%
-  filter(Target_member <= 10)
-count_connection <- function(df_network,member){
-  df_network_member <- df_network %>%
-    filter(Source_member == member) %>%
-    select(Target_member,Source_member) %>%
-    dplyr::count(Target_member)
-  return(df_network_member)
-}
-
-test <- count_connection(df_network_selected)
-
-connection_matrix <- matrix(0,10,10)
-for (member in 1:10) {
-  df_member <- count_connection(df_network_selected,member)
-  for (i in df_member$Target_member){
-    connection_matrix[member,i] = df_member %>%
-      filter(Target_member ==i) %>%
-      pull()
-  }
-
-}
-
-diag(connection_matrix) <- 0
-ratio_connection_matrix <- connection_matrix/rowSums(connection_matrix)
+# Read Cxy heatmap that was produced from random_network_validation.jl
+ratio_connection_matrix <- read_csv("cxy_matrix", col_names = FALSE)
+ratio_connection_matrix <- as.matrix(ratio_connection_matrix)
 #ratio_connection_matrix <- (ratio_connection_matrix + t(ratio_connection_matrix))/2
 
 colnames(ratio_connection_matrix) <- seq(1,10,by=1)
@@ -179,31 +176,10 @@ Cxy_heatmap <- pheatmap(ratio_connection_matrix,
                         cluster_cols=F,
                         cluster_rows=F,
                         angle_col = 0,
-                        legend_breaks = c(0.1, 0.2, 0.3, 0.4, 0.5,max(ratio_connection_matrix)),
-                        legend_labels = c("0.1", "0.2", "0.3", "0.4", "0.5", "Ratio Cx(y)"),
+                        legend_breaks = c(0.1, 0.2, 0.3,max(ratio_connection_matrix)),
+                        legend_labels = c("0.1", "0.2", "0.3", "Ratio Cx(y)"),
                         gaps_row = seq(1,10,by=1)
 )
-# heatmap --------------------------------------------------------------------
-setHook("grid.newpage", function() pushViewport(viewport(x=1,y=1,width=0.9, height=0.9, name="vp", just=c("right","top"))), action="prepend")
-
-Cxy_heatmap <- pheatmap(ratio_connection_matrix,
-         display_numbers = TRUE,
-         number_color = "black",
-         fontsize_number = 8,
-         colorRampPalette(rev(brewer.pal(n =3, name =
-                                           "RdYlBu")))(101),
-         cluster_cols=F,
-         cluster_rows=F,
-         angle_col = 0,
-         legend_breaks = c(0.1, 0.2, 0.3, 0.4, 0.5,max(ratio_connection_matrix)),
-         legend_labels = c("0.1", "0.2", "0.3", "0.4", "0.5", "Ratio Cx(y)"),
-         gaps_row = seq(1,10,by=1)
-         )
-
-setHook("grid.newpage", NULL, "replace")
-grid.text("Target Community", x=0.4,y=-0.02, gp=gpar(fontsize=16))
-grid.text("Source Community", x=0.9,y=0.3, rot=-90, gp=gpar(fontsize=16))
-
 # methylation analysis preparation --------------------------------------------
 
 query_methylation_member <- function(df,df_network,member,link.type="all"){

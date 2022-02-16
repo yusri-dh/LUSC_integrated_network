@@ -6,7 +6,7 @@ library(TCGAbiolinks)
 library(EDASeq)
 library(edgeR)
 library(dplyr)
-working_dir = "/home/yusri/Documents/project/LUSC_integrated_network/"
+working_dir = "LUSC_integrated_network/"
 
 setwd(working_dir)
 genome <- "hg38"
@@ -47,10 +47,10 @@ print("hypomethylation analysis finished")
 
 
 
-query.gene.exp <- GDCquery(project = project_name, 
+query.gene.exp <- GDCquery(project = project_name,
                       legacy = FALSE,
                       data.category = "Transcriptome Profiling",
-                      data.type = "Gene Expression Quantification", 
+                      data.type = "Gene Expression Quantification",
                       workflow.type = "HTSeq - FPKM-UQ",
                       sample.type = c("Primary Tumor","Solid Tissue Normal"))
 
@@ -70,10 +70,10 @@ dataNorm <- TCGAanalyze_Normalization(tabDF = dataPrep,
                                       geneInfo = geneInfoHT,
                                       method = "gcContent")
 dataFilt <- TCGAanalyze_Filtering(tabDF = dataNorm,
-                                  method = "quantile", 
+                                  method = "quantile",
                                   qnt.cut =  0.25)
 # Which samples are Primary Tumor
-dataSmTP <- TCGAquery_SampleTypes(getResults(query.exp,cols="cases"),"TP") 
+dataSmTP <- TCGAquery_SampleTypes(getResults(query.exp,cols="cases"),"TP")
 # which samples are solid tissue normal
 dataSmNT <- TCGAquery_SampleTypes(getResults(query.exp,cols="cases"),"NT")
 dataDEGs <- TCGAanalyze_DEA(mat1 = dataFilt[,dataSmNT],
@@ -92,10 +92,10 @@ dataFiltDENormal<- logdataFiltDE[,colnames(dataFilt) %in% dataSmNT]
 normlogdataFiltDETumor <- t(scale(t(dataFiltDETumor)))
 normlogdataFiltDENormal <- t(scale(t(dataFiltDENormal)))
 
-normlogdataFiltDETumor <- normlogdataFiltDETumor[complete.cases(normlogdataFiltDETumor), ] 
-normlogdataFiltDENormal <- normlogdataFiltDENormal[complete.cases(normlogdataFiltDENormal), ] 
+normlogdataFiltDETumor <- normlogdataFiltDETumor[complete.cases(normlogdataFiltDETumor), ]
+normlogdataFiltDENormal <- normlogdataFiltDENormal[complete.cases(normlogdataFiltDENormal), ]
 
 
 write.table(normlogdataFiltDETumor,paste(project_name,"Tumor.tsv",sep="_"),sep=" ",col.names=NA)
-write.table(normlogdataFiltDENormal,paste(project_name,"Normal.tsv",sep="_"),sep=" ",col.names=NA)
+# write.table(normlogdataFiltDENormal,paste(project_name,"Normal.tsv",sep="_"),sep=" ",col.names=NA)
 write.csv(as.data.frame(rowRanges(gene.exp))[c("ensembl_gene_id","external_gene_name","seqnames","start","end","strand")],paste(project_name,"gene_location.csv",sep="_"))
